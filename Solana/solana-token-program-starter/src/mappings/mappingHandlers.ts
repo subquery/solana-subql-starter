@@ -1,127 +1,146 @@
-import { TransferLog } from "../types/abi-interfaces/BaycAbi";
-import { Transfer, BoredApe, Properties, Mint } from "../types";
-import { MintApeTransaction } from "../types/abi-interfaces/BaycAbi";
-import fetch from "node-fetch";
-import assert from "assert";
+import assert from 'node:assert';
+import { InitializeAccountInstruction, InitializeAccount2Instruction, InitializeAccount3Instruction, TransferCheckedInstruction, TransferInstruction, CloseAccountInstruction } from '../types/handler-inputs/TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+import { SolanaInstruction, SolanaTransaction } from '@subql/types-solana';
+import { TransactionForFullJson } from '@solana/kit';
+import { TokenAccount, Transfer } from '../types/models';
 
-async function getOrCreateApe(event: TransferLog): Promise<BoredApe> {
-  assert(event.args);
-  logger.info(`ARGS ${JSON.stringify(event.args)}`);
-  let boredApe = await BoredApe.get(event.args.tokenId.toString());
 
-  if (boredApe == undefined) {
-    const ipfshash = "QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq";
-    let tokenURI = "/" + event.args.tokenId.toString();
-    let fullURI = ipfshash + tokenURI;
+function bnReplacer(value: any): any {
+  if (typeof value === 'bigint') {
+    return `${value.toString()}n`
+  }
+  return value;
+}
 
-    let content = await (await fetch("https://ipfs.io/ipfs/" + fullURI)).json();
+function allAccounts(
+  transaction: TransactionForFullJson<0>,
+) {
+  return [
+    ...transaction.transaction.message.accountKeys,
+    ...(transaction.meta?.loadedAddresses.writable ?? []),
+    ...(transaction.meta?.loadedAddresses.readonly ?? []),
+  ];
+}
 
-    const properties: Properties = {};
+const TOKEN_ADDR = 'rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof';
 
-    if (content) {
-      properties.image = content.image;
-      let attributes = content.attributes;
-      if (attributes) {
-        for (const attribute of attributes) {
-          let trait_type = attribute.trait_type;
-          let value_type = attribute.value;
+export function getAccountByIndex(
+  instruction: SolanaInstruction,
+  index: number,
+): string {
+  return allAccounts(instruction.transaction)[index];
+}
 
-          let trait: string;
-          let value: string;
+export async function handleInitAccount(instruction: InitializeAccountInstruction) {
+  logger.info('handleInitAccount');
 
-          if (trait_type && value_type) {
-            trait = trait_type.toString();
-            value = value_type.toString();
+  const mintIdx = instruction.accounts[1];
+  const mintToken = getAccountByIndex(instruction, mintIdx);
+  assert(mintToken === TOKEN_ADDR, `Expected mint token to be ${TOKEN_ADDR}, got: ${mintToken}`);
 
-            if (trait && value) {
-              if (trait == "Background") {
-                properties.background = value;
-              }
+  const acct = TokenAccount.create({
+    id: getAccountByIndex(instruction, instruction.accounts[0]),
+    token: mintToken,
+    transactionHash: instruction.transaction.transaction.signatures[0],
+    owner: getAccountByIndex(instruction, instruction.accounts[2]),
+  });
 
-              if (trait == "Clothes") {
-                properties.clothes = value;
-              }
+  await acct.save();
+}
 
-              if (trait == "Earring") {
-                properties.earring = value;
-              }
+export async function handleInitAccount2(instruction: InitializeAccount2Instruction) {
+  logger.info('handleInitAccount2');
 
-              if (trait == "Eyes") {
-                properties.eyes = value;
-              }
+  const mintIdx = instruction.accounts[1];
+  const mintToken = getAccountByIndex(instruction, mintIdx);
+  assert(mintToken === TOKEN_ADDR, `Expected mint token to be ${TOKEN_ADDR}, got: ${mintToken}`);
 
-              if (trait == "Fur") {
-                properties.fur = value;
-              }
+  const acct = TokenAccount.create({
+    id: getAccountByIndex(instruction, instruction.accounts[0]),
+    token: mintToken,
+    transactionHash: instruction.transaction.transaction.signatures[0],
+    owner: (await instruction.decodedData)!.data.owner
+  });
 
-              if (trait == "Hat") {
-                properties.hat = value;
-              }
+  await acct.save();
+}
 
-              if (trait == "Mouth") {
-                properties.mouth = value;
-              }
-            }
-          }
-        }
-      }
-    }
+export async function handleInitAccount3(instruction: InitializeAccount3Instruction) {
+  logger.info('handleInitAccount3');
+  const mintIdx = instruction.accounts[1];
+  const mintToken = getAccountByIndex(instruction, mintIdx);
+  assert(mintToken === TOKEN_ADDR, `Expected mint token to be ${TOKEN_ADDR}, got: ${mintToken}`);
 
-    boredApe = BoredApe.create({
-      id: event.args.tokenId.toString(),
-      creator: event.args.to,
-      currentOwner: event.args.to,
-      blockNumber: BigInt(event.blockNumber),
-      prorepties: properties,
-    });
+  const acct = TokenAccount.create({
+    id: getAccountByIndex(instruction, instruction.accounts[0]),
+    token: mintToken,
+    transactionHash: instruction.transaction.transaction.signatures[0],
+    owner: (await instruction.decodedData)!.data.owner
+  });
+
+  await acct.save();
+}
+
+export async function handleCloseAccount(instruction: CloseAccountInstruction) {
+  logger.info('handleCloseAccount');
+  const tokenAccountId = getAccountByIndex(instruction, instruction.accounts[0])
+  await TokenAccount.remove(tokenAccountId);
+}
+
+export async function handleTransfer(instruction: TransferInstruction) {
+  logger.info(`Solana instruction transfer`);
+  const source = getAccountByIndex(instruction, instruction.accounts[0]);
+  const dest = getAccountByIndex(instruction, instruction.accounts[1]);
+
+  const [sourceTokenAccount, destTokenAccount] = await Promise.all([
+    TokenAccount.get(source),
+    TokenAccount.get(dest),
+  ]);
+
+  if (!(sourceTokenAccount?.token === TOKEN_ADDR || destTokenAccount?.token === TOKEN_ADDR)) {
+    // Transfer is not for the specified token
+    return;
   }
 
-  boredApe.save();
-  return boredApe;
+  const decoded = await instruction.decodedData;
+  assert(decoded, "Expected decoded value");
+
+  const transfer = Transfer.create({
+    id: `${instruction.transaction.transaction.signatures[0]}-${instruction.index.join('.')}`,
+    amount: BigInt(decoded.data.amount),
+    from: source,
+    to: dest,
+    blockNumber: instruction.block.blockHeight,
+    transactionHash: instruction.transaction.transaction.signatures[0],
+    date: new Date(Number(instruction.block.blockTime) * 1000),
+  });
+
+  await transfer.save();
 }
 
-export async function handleMint(
-  transaction: MintApeTransaction,
-): Promise<void> {
-  assert(transaction.logs);
-  let transferLog: TransferLog = transaction.logs.find(
-    (e) =>
-      e.topics[0] ===
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-  ) as TransferLog;
+export async function handleCheckedTransfer(instruction: TransferCheckedInstruction) {
+  logger.info(`Solana instruction checked transfer`);
 
-  const { status } = await transaction.receipt()
-  logger.info("Transfer Log: " + JSON.stringify(transferLog) + ". Status: " + status);
-  let boredApe = await getOrCreateApe(transferLog);
-  let mint = Mint.create({
-    id: transaction.hash.toString(),
-    minter: transaction.from.toString(),
-    boredApeId: boredApe.id,
-    timestamp: transaction.blockTimestamp,
-    date: new Date(Number(transaction.blockTimestamp)),
+  const source = getAccountByIndex(instruction, instruction.accounts[0]);
+  const mint = getAccountByIndex(instruction, instruction.accounts[1]);
+  const dest = getAccountByIndex(instruction, instruction.accounts[2]);
+
+  if (mint !== TOKEN_ADDR) {
+    return;
+  }
+
+  const decoded = await instruction.decodedData;
+  assert(decoded, "Expected decoded value");
+
+  const transfer = Transfer.create({
+    id: `${instruction.transaction.transaction.signatures[0]}-${instruction.index.join('.')}`,
+    amount: BigInt(decoded.data.amount),
+    from: source,
+    to: dest,
+    blockNumber: instruction.block.blockHeight,
+    transactionHash: instruction.transaction.transaction.signatures[0],
+    date: new Date(Number(instruction.block.blockTime) * 1000),
   });
-  mint.save();
-}
 
-export async function handleTransfer(event: TransferLog): Promise<void> {
-  assert(event.args);
-  logger.info("Handle Transfer");
-  let boredApe = await getOrCreateApe(event);
-
-  let transfer = Transfer.create({
-    id: event.transactionHash + event.logIndex,
-    from: event.args.from,
-    to: event.args.to,
-    tokenId: event.args.tokenId.toBigInt(),
-    blockNumber: BigInt(event.blockNumber),
-    transactionHash: event.transactionHash,
-    timestamp: event.transaction.blockTimestamp,
-    date: new Date(Number(event.transaction.blockTimestamp)),
-    boredApeId: boredApe.id,
-  });
-  transfer.save();
-
-  boredApe.currentOwner = event.args.to;
-  boredApe.blockNumber = BigInt(event.blockNumber);
-  boredApe.save();
+  await transfer.save();
 }
