@@ -85,28 +85,33 @@ const project: SolanaProject = {
           },
           {
             kind: SolanaHandlerKind.Instruction,
-            handler: "handleCloseAccount",
-            filter: {
-              programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-              discriminator: "closeAccount",
-            },
-          },
-          {
-            kind: SolanaHandlerKind.Instruction,
-            handler: "handleTransfer",
-            filter: {
-              programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-              discriminator: "transfer",
-            },
-          },
-          {
-            kind: SolanaHandlerKind.Instruction,
             handler: "handleCheckedTransfer",
             filter: {
               programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
               discriminator: "transferChecked",
+              accounts: [
+                null,
+                [TOKEN],
+              ]
             },
           },
+          /* The below filters greatly decrease performance because theres no way to filter by token */
+          // {
+          //   kind: SolanaHandlerKind.Instruction,
+          //   handler: "handleCloseAccount",
+          //   filter: {
+          //     programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          //     discriminator: "closeAccount",
+          //   },
+          // },
+          // {
+          //   kind: SolanaHandlerKind.Instruction,
+          //   handler: "handleTransfer",
+          //   filter: {
+          //     programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          //     discriminator: "transfer",
+          //   },
+          // },
           // {
           //   kind: SolanaHandlerKind.Instruction,
           //   handler: "handleRecoverNestedAssociatedToken",
