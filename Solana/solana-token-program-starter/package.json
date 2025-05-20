@@ -22,9 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@solana/kit": "^2.1.0",
-    "@subql/common-ethereum": "^4.7.0",
-    "@subql/types-ethereum": "^4.1.0",
-    "@subql/types-solana": "file:.yalc/@subql/types-solana",
+    "@subql/common-solana": "^1.0.0",
     "@types/node-fetch": "latest",
     "abab": "^2.0.6",
     "assert": "^2.0.0"
@@ -32,7 +30,6 @@
   "devDependencies": {
     "@subql/cli": "^5.9.0",
     "@subql/testing": "latest",
-    "ethers": "^5.7.2",
     "typescript": "latest"
   },
   "packageManager": "yarn@3.8.1+sha512.8cfec856814c797ccb480703ca5270824327fac5abce240835e2699e01732229fd22bbeb1bb87047a0069f7698be9b2e3d9a926e6046e851faa9908fdacdeacf"
