@@ -35,7 +35,7 @@ services:
       - ${SUB_COMMAND:-} # set SUB_COMMAND env variable to "test" to run tests
       - -f=/app
       - --db-schema=app
-      - --workers=4
+      # - --workers=4 # Because of the Solana dictionary, unless all blocks are being indexed workers will likely slow down indexing
       - --batch-size=1
       - --unfinalized-blocks=true
       - --unsafe
